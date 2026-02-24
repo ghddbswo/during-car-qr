@@ -180,6 +180,3 @@ else:
             except Exception:
                 pass
         st.dataframe(mm, use_container_width=True, hide_index=True)
-
-else:
-    st.info("왼쪽에서 차량ID/차량번호로 조회하거나, QR 링크로 접속하세요. 예: ?car_id=DR-CAR-01")
