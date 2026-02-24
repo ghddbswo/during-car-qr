@@ -155,16 +155,17 @@ if car_id:
     st.markdown("### 🧰 정비 이력")
     # attempt linkage by 차량번호 first, fallback by 차량ID if present
     m = maint.copy()
-    if "차량번호" in m.columns:
-        mm = m[
-    m["차량번호"].astype(str).str.replace(" ", "").str.strip()
-    ==
-    car_no.replace(" ", "").strip()
-]
-    elif "차량ID" in m.columns:
-        mm = m[m["차량ID"].astype(str) == str(car_id)]
-    else:
-        mm = m.iloc[0:0]
+    m = maint.copy()
+
+if "차량번호" in m.columns:
+    mm = m[
+        m["차량번호"].astype(str).str.replace(" ", "").str.strip()
+        == str(car_no).replace(" ", "").strip()
+    ]
+elif "차량ID" in m.columns:
+    mm = m[m["차량ID"].astype(str).str.strip() == str(car_id).strip()]
+else:
+    mm = m.iloc[0:0]
 
     if mm.empty:
         st.info("정비 이력이 없습니다.")
