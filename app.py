@@ -64,6 +64,29 @@ def get_qp(name: str):
     return v if v else None
 
 
+def fmt_km(x):
+    """엑셀 값이 68243 / 68,243 / 68243km / 68,243KM 등이어도 최대한 숫자로 뽑아 포맷"""
+    if x is None or (isinstance(x, float) and pd.isna(x)):
+        return "-"
+    s = str(x).strip()
+    if s == "" or s.lower() == "nan":
+        return "-"
+
+    # 숫자만 추출 (콤마/공백/km 제거)
+    s2 = (
+        s.replace(",", "")
+        .replace(" ", "")
+        .replace("km", "")
+        .replace("KM", "")
+        .replace("Km", "")
+    )
+    try:
+        v = int(float(s2))
+        return f"{v:,} km"
+    except Exception:
+        return s  # 변환 실패 시 원문 표시
+
+
 cars, maint = load_data(XLSX_PATH)
 
 st.title("🚗 듀링 법인차량 현황 (QR 조회)")
@@ -143,6 +166,11 @@ if car_id:
         st.write(f"**차량구분**: {kind if kind else '-'}")
         st.write(f"**운용사업장**: {site if site else '-'}")
         st.write(f"**사용자**: {user if user else '-'}")
+
+        # ✅ 차량현황에 주행거리 컬럼이 있으면 표시
+        if "주행거리" in cars.columns:
+            st.write(f"**주행거리**: {fmt_km(r.get('주행거리', None))}")
+
     with c2:
         ins = str(r.get("보험사", "")).strip()
         ins_phone = str(r.get("보험사연락처", "")).strip()
@@ -186,9 +214,14 @@ if car_id:
     if mm.empty:
         st.info("정비 이력이 없습니다.")
     else:
+        # ✅ 정비일자: 시간 제거 + 최신순
         if "정비일자" in mm.columns:
-            mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce").dt.date  # ✅ 시간 제거
+            mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce").dt.date
             mm = mm.sort_values("정비일자", ascending=False)
+
+        # ✅ 정비이력 주행거리 콤마 표시(가능하면)
+        if "주행거리" in mm.columns:
+            mm["주행거리"] = mm["주행거리"].apply(fmt_km)
 
         st.dataframe(mm, use_container_width=True, hide_index=True)
 
