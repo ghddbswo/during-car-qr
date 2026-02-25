@@ -194,9 +194,9 @@ if car_id:
         st.info("정비 이력이 없습니다.")
     else:
         # 최신순 정렬
-        if "정비일자" in mm.columns:
-            mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce")
-            mm = mm.sort_values("정비일자", ascending=False)
+if "정비일자" in mm.columns:
+    mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce").dt.date  # 🔥 시간 제거
+    mm = mm.sort_values("정비일자", ascending=False)
 
         st.dataframe(mm, use_container_width=True, hide_index=True)
 
