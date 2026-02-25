@@ -174,25 +174,35 @@ if car_id:
             st.write(f"월 렌트료: {rent_fee:,}원")
         except Exception:
             st.write(f"월 렌트료: {rent_fee}")
+# ---- 정비 이력 ----
+st.divider()
+st.markdown("### 🧰 정비 이력")
 
-    # ---- 정비 이력 ----
-    st.divider()
-    st.markdown("### 🧰 정비 이력")
+m = maint.copy()
 
-    m = maint.copy()
+# 차량ID 기준 필터
+if "차량ID" in m.columns:
+    mm = m[m["차량ID"] == str(car_id).strip()].copy()
 
-    # ✅ 차량ID 기준 필터 (가장 정확)
-    if "차량ID" in m.columns:
-        mm = m[m["차량ID"] == str(car_id).strip()].copy()
-    # fallback
-    elif "차량번호" in m.columns:
-        mm = m[m["차량번호"].str.replace(" ", "") == str(car_no).replace(" ", "")].copy()
-    else:
-        mm = m.iloc[0:0].copy()
+# fallback (차량번호)
+elif "차량번호" in m.columns:
+    mm = m[m["차량번호"].str.replace(" ", "") == str(car_no).replace(" ", "")].copy()
 
-    if mm.empty:
-        st.info("정비 이력이 없습니다.")
-    else:
+# 아무 컬럼도 없으면 빈값
+else:
+    mm = m.iloc[0:0].copy()
+
+# 결과 출력
+if mm.empty:
+    st.info("정비 이력이 없습니다.")
+else:
+    # 날짜 처리
+    if "정비일자" in mm.columns:
+        mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce").dt.date
+        mm = mm.sort_values("정비일자", ascending=False)
+
+    st.dataframe(mm, use_container_width=True, hide_index=True)
+
         # 최신순 정렬
 if "정비일자" in mm.columns:
     mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce").dt.date  # 🔥 시간 제거
