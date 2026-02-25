@@ -10,13 +10,13 @@ XLSX_PATH = "data/듀링 법인차량 현황 ver.2.0.xlsx"
 @st.cache_data(show_spinner=False)
 def load_data(xlsx_path: str):
     cars = pd.read_excel(xlsx_path, sheet_name="법인차량현황")
-    maint = pd.read_excel(xlsx_path, sheet_name="정비이력")  # ✅ 시트명 변경
+    maint = pd.read_excel(xlsx_path, sheet_name="정비이력")  # ✅ 시트명
 
-    # normalize columns
+    # 컬럼명 공백 제거
     cars.columns = [str(c).strip() for c in cars.columns]
     maint.columns = [str(c).strip() for c in maint.columns]
 
-    # normalize key fields
+    # 키 컬럼 정리
     if "차량ID" in cars.columns:
         cars["차량ID"] = cars["차량ID"].astype(str).str.strip()
     if "차량번호" in cars.columns:
@@ -56,7 +56,6 @@ def fmt_dday(label, d):
     return f"{label}: {d} (D+{abs(dd)})"
 
 
-# ---- QR query param 안전하게 읽기 ----
 def get_qp(name: str):
     v = st.query_params.get(name, None)
     if isinstance(v, list):
@@ -75,7 +74,6 @@ car_id = None
 with st.sidebar:
     st.header("검색")
 
-    # QR로 들어오면 차량ID 모드로 시작
     mode = st.radio("조회 방식", ["차량ID", "차량번호"], index=0)
 
     if mode == "차량ID":
@@ -92,7 +90,6 @@ with st.sidebar:
         if not options:
             st.warning("차량ID 데이터가 없습니다.")
         else:
-            # URL car_id가 있으면 선택값 강제 세팅 + rerun
             if qp_car_id and qp_car_id in options:
                 if st.session_state.get("car_id_select") != qp_car_id:
                     st.session_state["car_id_select"] = qp_car_id
@@ -100,8 +97,7 @@ with st.sidebar:
             else:
                 st.session_state.setdefault("car_id_select", options[0])
 
-            chosen = st.selectbox("차량ID 선택", options, key="car_id_select")
-            car_id = chosen
+            car_id = st.selectbox("차량ID 선택", options, key="car_id_select")
 
     else:
         options = (
@@ -133,7 +129,6 @@ if car_id:
 
     r = row.iloc[0]
 
-    # key fields
     car_no = str(r.get("차량번호", "")).strip()
     car_model = str(r.get("차종", "")).strip()
     user = str(r.get("사용자", "")).strip()
@@ -174,39 +169,26 @@ if car_id:
             st.write(f"월 렌트료: {rent_fee:,}원")
         except Exception:
             st.write(f"월 렌트료: {rent_fee}")
-# ---- 정비 이력 ----
-st.divider()
-st.markdown("### 🧰 정비 이력")
 
-m = maint.copy()
+    st.divider()
+    st.markdown("### 🧰 정비 이력")
 
-# 차량ID 기준 필터
-if "차량ID" in m.columns:
-    mm = m[m["차량ID"] == str(car_id).strip()].copy()
+    m = maint.copy()
 
-# fallback (차량번호)
-elif "차량번호" in m.columns:
-    mm = m[m["차량번호"].str.replace(" ", "") == str(car_no).replace(" ", "")].copy()
+    # ✅ 차량ID 기준 필터
+    if "차량ID" in m.columns:
+        mm = m[m["차량ID"] == str(car_id).strip()].copy()
+    elif "차량번호" in m.columns:
+        mm = m[m["차량번호"].str.replace(" ", "") == str(car_no).replace(" ", "")].copy()
+    else:
+        mm = m.iloc[0:0].copy()
 
-# 아무 컬럼도 없으면 빈값
-else:
-    mm = m.iloc[0:0].copy()
-
-# 결과 출력
-if mm.empty:
-    st.info("정비 이력이 없습니다.")
-else:
-    # 날짜 처리
-    if "정비일자" in mm.columns:
-        mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce").dt.date
-        mm = mm.sort_values("정비일자", ascending=False)
-
-    st.dataframe(mm, use_container_width=True, hide_index=True)
-
-        # 최신순 정렬
-if "정비일자" in mm.columns:
-    mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce").dt.date  # 🔥 시간 제거
-    mm = mm.sort_values("정비일자", ascending=False)
+    if mm.empty:
+        st.info("정비 이력이 없습니다.")
+    else:
+        if "정비일자" in mm.columns:
+            mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce").dt.date  # ✅ 시간 제거
+            mm = mm.sort_values("정비일자", ascending=False)
 
         st.dataframe(mm, use_container_width=True, hide_index=True)
 
