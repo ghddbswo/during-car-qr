@@ -12,7 +12,7 @@ def load_data(xlsx_path: str):
     cars = pd.read_excel(xlsx_path, sheet_name="법인차량현황")
     maint = pd.read_excel(xlsx_path, sheet_name="정비이력")  # ✅ 시트명
 
-    # 컬럼명 공백 제거
+    # 컬럼명 정리
     cars.columns = [str(c).strip() for c in cars.columns]
     maint.columns = [str(c).strip() for c in maint.columns]
 
@@ -65,14 +65,13 @@ def get_qp(name: str):
 
 
 def fmt_km(x):
-    """엑셀 값이 68243 / 68,243 / 68243km / 68,243KM 등이어도 최대한 숫자로 뽑아 포맷"""
+    """어떤 형식이 와도 최대한 숫자로 추출해 '68,243KM' 형태로 출력"""
     if x is None or (isinstance(x, float) and pd.isna(x)):
         return "-"
     s = str(x).strip()
     if s == "" or s.lower() == "nan":
         return "-"
 
-    # 숫자만 추출 (콤마/공백/km 제거)
     s2 = (
         s.replace(",", "")
         .replace(" ", "")
@@ -82,9 +81,30 @@ def fmt_km(x):
     )
     try:
         v = int(float(s2))
-        return f"{v:,} km"
+        return f"{v:,}KM"  # ✅ 원하는 형식
     except Exception:
-        return s  # 변환 실패 시 원문 표시
+        return s
+
+
+def fmt_won(x):
+    """어떤 형식이 와도 최대한 숫자로 추출해 '889,650원' 형태로 출력"""
+    if x is None or (isinstance(x, float) and pd.isna(x)):
+        return "-"
+    s = str(x).strip()
+    if s == "" or s.lower() == "nan":
+        return "-"
+
+    s2 = (
+        s.replace(",", "")
+        .replace(" ", "")
+        .replace("원", "")
+        .replace("₩", "")
+    )
+    try:
+        v = int(float(s2))
+        return f"{v:,}원"
+    except Exception:
+        return s
 
 
 cars, maint = load_data(XLSX_PATH)
@@ -113,6 +133,7 @@ with st.sidebar:
         if not options:
             st.warning("차량ID 데이터가 없습니다.")
         else:
+            # URL car_id가 있으면 선택값 강제 세팅 + rerun
             if qp_car_id and qp_car_id in options:
                 if st.session_state.get("car_id_select") != qp_car_id:
                     st.session_state["car_id_select"] = qp_car_id
@@ -167,7 +188,7 @@ if car_id:
         st.write(f"**운용사업장**: {site if site else '-'}")
         st.write(f"**사용자**: {user if user else '-'}")
 
-        # ✅ 차량현황에 주행거리 컬럼이 있으면 표시
+        # 차량현황 주행거리(있으면)
         if "주행거리" in cars.columns:
             st.write(f"**주행거리**: {fmt_km(r.get('주행거리', None))}")
 
@@ -190,20 +211,17 @@ if car_id:
     st.write(fmt_dday("검사만료일", insp_end))
     st.write(fmt_dday("계약종료일(렌트)", contract_end))
 
+    # 렌트료 콤마(원)
     rent_fee = r.get("월 렌트료", r.get("월금액", None))
     if pd.notna(rent_fee) and str(rent_fee).strip() != "":
-        try:
-            rent_fee = int(float(rent_fee))
-            st.write(f"월 렌트료: {rent_fee:,}원")
-        except Exception:
-            st.write(f"월 렌트료: {rent_fee}")
+        st.write(f"월 렌트료: {fmt_won(rent_fee)}")
 
     st.divider()
     st.markdown("### 🧰 정비 이력")
 
     m = maint.copy()
 
-    # ✅ 차량ID 기준 필터
+    # 차량ID 기준 필터
     if "차량ID" in m.columns:
         mm = m[m["차량ID"] == str(car_id).strip()].copy()
     elif "차량번호" in m.columns:
@@ -214,14 +232,20 @@ if car_id:
     if mm.empty:
         st.info("정비 이력이 없습니다.")
     else:
-        # ✅ 정비일자: 시간 제거 + 최신순
+        # 날짜: 시간 제거 + 최신순
         if "정비일자" in mm.columns:
             mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce").dt.date
             mm = mm.sort_values("정비일자", ascending=False)
 
-        # ✅ 정비이력 주행거리 콤마 표시(가능하면)
+        # 정비이력 주행거리/금액 포맷
         if "주행거리" in mm.columns:
             mm["주행거리"] = mm["주행거리"].apply(fmt_km)
+
+        # 금액 컬럼명이 '금액' 또는 '정비금액'인 경우 둘 다 처리
+        if "금액" in mm.columns:
+            mm["금액"] = mm["금액"].apply(fmt_won)
+        if "정비금액" in mm.columns:
+            mm["정비금액"] = mm["정비금액"].apply(fmt_won)
 
         st.dataframe(mm, use_container_width=True, hide_index=True)
 
