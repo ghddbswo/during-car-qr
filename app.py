@@ -4,14 +4,31 @@ from datetime import datetime, date
 
 st.set_page_config(page_title="듀링 법인차량 QR 조회", layout="centered")
 
+XLSX_PATH = "data/듀링 법인차량 현황 ver.2.0.xlsx"
+
+
 @st.cache_data(show_spinner=False)
 def load_data(xlsx_path: str):
     cars = pd.read_excel(xlsx_path, sheet_name="법인차량현황")
-    maint = pd.read_excel(xlsx_path, sheet_name="정비현황")
+    maint = pd.read_excel(xlsx_path, sheet_name="정비이력")  # ✅ 시트명 변경
+
     # normalize columns
     cars.columns = [str(c).strip() for c in cars.columns]
     maint.columns = [str(c).strip() for c in maint.columns]
+
+    # normalize key fields
+    if "차량ID" in cars.columns:
+        cars["차량ID"] = cars["차량ID"].astype(str).str.strip()
+    if "차량번호" in cars.columns:
+        cars["차량번호"] = cars["차량번호"].astype(str).str.strip()
+
+    if "차량ID" in maint.columns:
+        maint["차량ID"] = maint["차량ID"].astype(str).str.strip()
+    if "차량번호" in maint.columns:
+        maint["차량번호"] = maint["차량번호"].astype(str).str.strip()
+
     return cars, maint
+
 
 def to_date(x):
     if pd.isna(x):
@@ -23,10 +40,12 @@ def to_date(x):
     except Exception:
         return None
 
+
 def dday(d):
     if d is None:
         return None
     return (d - date.today()).days
+
 
 def fmt_dday(label, d):
     if d is None:
@@ -36,11 +55,6 @@ def fmt_dday(label, d):
         return f"{label}: {d} (D-{dd})"
     return f"{label}: {d} (D+{abs(dd)})"
 
-XLSX_PATH = "data/듀링 법인차량 현황 ver.2.0.xlsx"
-
-cars, maint = load_data(XLSX_PATH)
-
-st.title("🚗 듀링 법인차량 현황 (QR 조회)")
 
 # ---- QR query param 안전하게 읽기 ----
 def get_qp(name: str):
@@ -50,8 +64,12 @@ def get_qp(name: str):
     v = str(v).strip() if v else None
     return v if v else None
 
-qp_car_id = get_qp("car_id")
 
+cars, maint = load_data(XLSX_PATH)
+
+st.title("🚗 듀링 법인차량 현황 (QR 조회)")
+
+qp_car_id = get_qp("car_id")
 car_id = None
 
 with st.sidebar:
@@ -61,7 +79,6 @@ with st.sidebar:
     mode = st.radio("조회 방식", ["차량ID", "차량번호"], index=0)
 
     if mode == "차량ID":
-        # ✅ options 자체를 strip 해서 공백 문제 제거
         options = (
             cars.get("차량ID", pd.Series(dtype=str))
             .dropna()
@@ -72,18 +89,19 @@ with st.sidebar:
         )
         options.sort()
 
-        # ✅ URL car_id가 있으면 선택값 강제 세팅 + rerun
-        if qp_car_id and qp_car_id in options:
-            if st.session_state.get("car_id_select") != qp_car_id:
-                st.session_state["car_id_select"] = qp_car_id
-                st.rerun()
+        if not options:
+            st.warning("차량ID 데이터가 없습니다.")
         else:
-            st.session_state.setdefault("car_id_select", options[0] if options else None)
+            # URL car_id가 있으면 선택값 강제 세팅 + rerun
+            if qp_car_id and qp_car_id in options:
+                if st.session_state.get("car_id_select") != qp_car_id:
+                    st.session_state["car_id_select"] = qp_car_id
+                    st.rerun()
+            else:
+                st.session_state.setdefault("car_id_select", options[0])
 
-        chosen = st.selectbox("차량ID 선택", options, key="car_id_select")
-
-        # 버튼 없어도 바로 반영
-        car_id = chosen
+            chosen = st.selectbox("차량ID 선택", options, key="car_id_select")
+            car_id = chosen
 
     else:
         options = (
@@ -96,18 +114,23 @@ with st.sidebar:
         )
         options.sort()
 
-        st.session_state.setdefault("car_no_select", options[0] if options else None)
-        chosen_num = st.selectbox("차량번호 선택", options, key="car_no_select")
+        if not options:
+            st.warning("차량번호 데이터가 없습니다.")
+        else:
+            st.session_state.setdefault("car_no_select", options[0])
+            chosen_num = st.selectbox("차량번호 선택", options, key="car_no_select")
 
-        if st.button("조회"):
-            match = cars[cars["차량번호"].astype(str).str.strip() == str(chosen_num).strip()]
-            car_id = match["차량ID"].astype(str).str.strip().iloc[0] if not match.empty else None
+            if st.button("조회"):
+                match = cars[cars["차량번호"] == str(chosen_num).strip()]
+                car_id = match["차량ID"].iloc[0] if not match.empty else None
+
 
 if car_id:
-    row = cars[cars["차량ID"].astype(str) == str(car_id)]
+    row = cars[cars["차량ID"] == str(car_id).strip()]
     if row.empty:
         st.error(f"해당 차량ID를 찾지 못했습니다: {car_id}")
         st.stop()
+
     r = row.iloc[0]
 
     # key fields
@@ -130,7 +153,7 @@ if car_id:
         ins_phone = str(r.get("보험사연락처", "")).strip()
         st.write(f"**보험사**: {ins if ins else '-'}")
         st.write(f"**보험사 연락처**: {ins_phone if ins_phone else '-'}")
-        if ins_phone and ins_phone != "nan":
+        if ins_phone and ins_phone.lower() != "nan":
             tel = ins_phone.replace("-", "").replace(" ", "")
             st.markdown(f"[📞 보험사 전화걸기](tel:{tel})")
 
@@ -145,38 +168,37 @@ if car_id:
     st.write(fmt_dday("계약종료일(렌트)", contract_end))
 
     rent_fee = r.get("월 렌트료", r.get("월금액", None))
-
     if pd.notna(rent_fee) and str(rent_fee).strip() != "":
-        rent_fee = int(float(rent_fee))  # 숫자로 변환 + 소수점 제거
-        st.write(f"월 렌트료: {rent_fee:,}원")
+        try:
+            rent_fee = int(float(rent_fee))
+            st.write(f"월 렌트료: {rent_fee:,}원")
+        except Exception:
+            st.write(f"월 렌트료: {rent_fee}")
 
-    # maintenance
+    # ---- 정비 이력 ----
     st.divider()
     st.markdown("### 🧰 정비 이력")
-    # attempt linkage by 차량번호 first, fallback by 차량ID if present
-    m = maint.copy()
+
     m = maint.copy()
 
-if "차량번호" in m.columns:
-    mm = m[
-        m["차량번호"].astype(str).str.replace(" ", "").str.strip()
-        == str(car_no).replace(" ", "").strip()
-    ]
-elif "차량ID" in m.columns:
-    mm = m[m["차량ID"].astype(str).str.strip() == str(car_id).strip()]
-else:
-    mm = m.iloc[0:0]
+    # ✅ 차량ID 기준 필터 (가장 정확)
+    if "차량ID" in m.columns:
+        mm = m[m["차량ID"] == str(car_id).strip()].copy()
+    # fallback
+    elif "차량번호" in m.columns:
+        mm = m[m["차량번호"].str.replace(" ", "") == str(car_no).replace(" ", "")].copy()
+    else:
+        mm = m.iloc[0:0].copy()
 
     if mm.empty:
         st.info("정비 이력이 없습니다.")
     else:
-        # show latest first if there is a date column
-        date_cols = [c for c in mm.columns if "일" in c or "date" in c.lower()]
-        if date_cols:
-            dc = date_cols[0]
-            try:
-                mm[dc] = pd.to_datetime(mm[dc], errors="coerce")
-                mm = mm.sort_values(dc, ascending=False)
-            except Exception:
-                pass
+        # 최신순 정렬
+        if "정비일자" in mm.columns:
+            mm["정비일자"] = pd.to_datetime(mm["정비일자"], errors="coerce")
+            mm = mm.sort_values("정비일자", ascending=False)
+
         st.dataframe(mm, use_container_width=True, hide_index=True)
+
+else:
+    st.info("좌측에서 차량을 선택하거나 QR로 접속하세요.")
