@@ -11,7 +11,7 @@ from reportlab.lib.utils import ImageReader
 BASE_URL = "https://during-car-qr-ufmsb3kchhcxzdryxnrury.streamlit.app"
 XLSX_PATH = "data/듀링 법인차량 현황 ver.2.0.xlsx"
 # 한글 폰트 등록 (윈도우: 맑은 고딕)
-FONT_PATH = r"C:\Windows\Fonts\malgun.ttf"
+c.setFont("Helvetica", 9)
 pdfmetrics.registerFont(TTFont("Malgun", FONT_PATH))
 def build_qr(url: str, out_path: str):
     img = qrcode.make(url)
